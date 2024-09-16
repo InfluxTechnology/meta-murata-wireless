@@ -276,7 +276,7 @@ do_install () {
 		install -m 755 ${S}/switch_module_imx8mmea-ucom.sh ${D}/usr/sbin/switch_module.sh
         	;;
           imx8mm-smart)
-                install -m 755 ${S}/switch_module_imx8mmea-ucom.sh ${D}/usr/sbin/switch_module.sh
+                install -m 755 ${S}/switch_module_imx8mm-smart.sh ${D}/usr/sbin/switch_module.sh
 	        ;;
 	  imx8mm-influx-rexge-smart)
 		install -m 755 ${S}/switch_module_imx8mm-influx-rexge-smart.sh ${D}/usr/sbin/switch_module.sh
