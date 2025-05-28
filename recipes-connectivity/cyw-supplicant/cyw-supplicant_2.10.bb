@@ -5,7 +5,6 @@ BUGTRACKER = "http://w1.fi/security/"
 SECTION = "network"
 LICENSE = "BSD-3-Clause"
 LIC_FILES_CHKSUM = "file://COPYING;md5=5ebcb90236d1ad640558c3d3cd3035df \
-                    file://README;beginline=1;endline=56;md5=e3d2f6c2948991e37c1ca4960de84747 \
 "
 DEPENDS = "dbus libnl"
 #RRECOMMENDS:${PN} = "wpa-supplicant-passphrase wpa-supplicant-cli"

@@ -141,6 +141,11 @@ function clean_up() {
   if [ ! -e /usr/share/murata_wireless/hci_uart.ko ]; then
       cp /lib/modules/$(uname -r)/kernel/drivers/bluetooth/hci_uart.ko /usr/share/murata_wireless/hci_uart.ko 
   fi
+
+  # Delete the special file created for 2FY
+  if [ -e /etc/modprobe.d/2fy_m2.conf ]; then
+    rm /etc/modprobe.d/2fy_m2.conf
+  fi
 }
 
 function prepare_for_nxp_bt() {
@@ -414,6 +419,40 @@ EOT
   handle_services true false
 }
 
+function prepare_for_nxp_ll_sdio() {
+  clean_up
+  prepare_for_nxp_bt
+  ln -s /usr/sbin/wpa_supplicant.nxp /usr/sbin/wpa_supplicant
+  ln -s /usr/sbin/wpa_cli.nxp /usr/sbin/wpa_cli
+  ln -s /usr/sbin/hostapd.nxp /usr/sbin/hostapd
+  ln -s /usr/sbin/hostapd_cli.nxp /usr/sbin/hostapd_cli
+  
+  cat <<EOT > /etc/depmod.d/nxp_depmod.conf
+# Force modprobe to search kernel/net/wireless (where the NXP
+# version of cfg80211.ko is placed) before looking in updates/net/wireless/
+# (where the Cypress version is)
+override cfg80211 * kernel/net/wireless
+
+EOT
+
+  cat <<EOT > /etc/modprobe.d/nxp_modules.conf
+# Prevent the Cypress version of cfg80211.ko from being loaded.
+blacklist cfg80211
+
+# Alias for the NXP modules
+alias sdio:c*v0471d0215* moal
+
+# Specify arguments to pass when loading the iw612 module
+options moal mod_para=nxp/wifi_mod_para.conf
+EOT
+
+  depmod -a
+
+  # Disable Cypress service and enable NXP service
+  handle_services true false
+}
+
+
 function prepare_for_cypress() {
   clean_up
   ln -s /usr/sbin/wpa_supplicant.cyw /usr/sbin/wpa_supplicant
@@ -437,9 +476,6 @@ function prepare_for_cypress() {
   # It needs <module.hcd> to be renamed as "BCM.hcd" and placed in /lib/firmware/brcm
 
   case $cyw_module in
-  CX|1CX)
-     cp /lib/firmware/brcm/BCM4356A2_001.003.015.0112.0410.1CX.hcd /lib/firmware/brcm/BCM.hcd
-    ;;
   DX|1DX)
      cp /lib/firmware/brcm/BCM43430A1_001.002.009.0159.0528.1DX.hcd /lib/firmware/brcm/BCM.hcd
     ;;
@@ -450,19 +486,22 @@ function prepare_for_cypress() {
      cp /lib/firmware/brcm/BCM4345C0_003.001.025.0187.0366.1MW.hcd /lib/firmware/brcm/BCM.hcd
     ;;
   YN|1YN)
-     cp /lib/firmware/brcm/CYW4343A2_001.003.016.0031.0000.1YN.hcd /lib/firmware/brcm/BCM.hcd
+     cp /lib/firmware/brcm/CYW4343A2_001.003.016.0071.0017.1YN.hcd /lib/firmware/brcm/BCM.hcd
+    ;;
+  2AE-USB|AE-USB|2BC-USB|BC-USB)
+     cp /lib/firmware/brcm/murata-master/_CYW4373A0_001.001.025.0119.0000.2AE.USB_FCC.hcd /lib/firmware/brcm/BCM.hcd
     ;;
   2AE|AE)
      cp /lib/firmware/cypress/cyfmac4373-sdio.2AE.bin /lib/firmware/cypress/cyfmac4373-sdio.bin
      cp /lib/firmware/cypress/cyfmac4373-sdio.2AE.txt /lib/firmware/cypress/cyfmac4373-sdio.txt
      cp /lib/firmware/cypress/cyfmac4373-sdio.2AE.clm_blob /lib/firmware/cypress/cyfmac4373-sdio.clm_blob
-     cp /lib/firmware/brcm/BCM4373A0.2AE.hcd /lib/firmware/brcm/BCM.hcd
+     cp /lib/firmware/brcm/BCM4373A0_001.001.025.0103.0155.FCC.CE.2AE.hcd /lib/firmware/brcm/BCM.hcd
     ;;
   2BC|BC)
      cp /lib/firmware/cypress/cyfmac4373-sdio.2BC.bin /lib/firmware/cypress/cyfmac4373-sdio.bin
      cp /lib/firmware/cypress/cyfmac4373-sdio.2BC.txt /lib/firmware/cypress/cyfmac4373-sdio.txt
      cp /lib/firmware/cypress/cyfmac4373-sdio.2BC.clm_blob /lib/firmware/cypress/cyfmac4373-sdio.clm_blob
-     cp /lib/firmware/brcm/BCM4373A0.2BC.hcd /lib/firmware/brcm/BCM.hcd
+     cp /lib/firmware/brcm/BCM4373A0_001.001.025.0103.0155.FCC.CE.2BC.hcd /lib/firmware/brcm/BCM.hcd
     ;;
   XA|1XA)
      cp /lib/firmware/brcm/BCM4359D0_004.001.016.0241.0275.1XA.sAnt.hcd /lib/firmware/brcm/BCM.hcd
@@ -471,7 +510,10 @@ function prepare_for_cypress() {
      cp /lib/firmware/brcm/BCM4359D0_004.001.016.0241.0275.2BZ.sAnt.hcd /lib/firmware/brcm/BCM.hcd
     ;;
   2EA-SDIO|2EA-PCIE)
-     cp /lib/firmware/brcm/CYW55560A1_001.002.087.0159.0010.hcd /lib/firmware/brcm/BCM.hcd
+     cp /lib/firmware/brcm/CYW55560A1_001.002.087.0269.0100.FCC.2EA.sAnt.hcd /lib/firmware/brcm/BCM.hcd
+    ;;
+  FY|2FY)
+     cp /lib/firmware/brcm/CYW55500A1_001.002.032.0040.0033.2FY.hcd /lib/firmware/brcm/BCM.hcd
     ;;
   esac
 
@@ -500,9 +542,9 @@ function off() {
 
 function switch_to_cypress_sdio() {
   echo ""
-  echo "Setting up for 1DX, 1LV, 1MW, 1WZ, 1YN, 2AE, 2BC, 2BZ, 2EA (Cypress - SDIO)"
+  echo "Setting up for 1DX, 1LV, 1MW, 1WZ, 1YN, 2AE, 2BC, 2BZ, 2EA, 2GF, 2FY (Cypress - SDIO)"
 
-  if [ $cyw_module == "2EA-SDIO" ]; then
+  if [ $cyw_module == "2EA-SDIO" ] || [ $cyw_module == "2FY" ]; then
      fw_setenv fdt_file imx93-ea-ucom-kit-2ea.dtb 2>/dev/null
      fw_setenv bt_hint cypress_2ea
      fw_setenv cmd_custom
@@ -515,6 +557,13 @@ function switch_to_cypress_sdio() {
   fi
 
   prepare_for_cypress
+
+  # Set sdio_idleclk_disable=1 parameter when loading brcmfmac for 2FY.
+  # The file created here is deleted in clean_up function above.
+  if [ $cyw_module == "2FY" ]; then
+     echo "options brcmfmac sdio_idleclk_disable=1" > /etc/modprobe.d/2fy_m2.conf
+  fi
+
   echo "Setup complete."
   echo ""
 }
@@ -523,7 +572,7 @@ function switch_to_cypress_ae_usb() {
   echo ""
   echo "Setting up for 2AE (Cypress - USB)"
 
-  fw_setenv fdt_file imx93-ea-ucom-kit.dtb 2>/dev/null
+  fw_setenv fdt_file imx93-ea-ucom-kit-m2_usb.dtb 2>/dev/null
   fw_setenv bt_hint cypress
   fw_setenv cmd_custom
   restore_ko
@@ -538,7 +587,7 @@ function switch_to_cypress_bc_usb() {
   echo ""
   echo "Setting up for 2BC (Cypress - USB)"
 
-  fw_setenv fdt_file imx93-ea-ucom-kit.dtb 2>/dev/null
+  fw_setenv fdt_file imx93-ea-ucom-kit-m2_usb.dtb 2>/dev/null
   fw_setenv bt_hint cypress
   fw_setenv cmd_custom
   restore_ko
@@ -576,7 +625,7 @@ function switch_to_nxp_sdio() {
   restore_ko
   fw_setenv fdt_file imx93-ea-ucom-kit.dtb 2>/dev/null
   fw_setenv bt_hint nxp
-  fw_setenv cmd_custom "fdt mknod serial4 bluetooth; fdt set serial4/bluetooth compatible nxp,88w8987-bt"
+  fw_setenv cmd_custom "fdt mknod serial4 bluetooth; fdt set serial4/bluetooth compatible nxp,88w8987-bt; fdt set /soc/bus@42800000/mmc@428b0000 max-frequency <134000000>"
   prepare_for_nxp_sdio
   echo "Setup complete."
   echo ""
@@ -605,6 +654,19 @@ function switch_to_nxp_el_sdio() {
   echo "Setup complete."
   echo ""
 }
+
+function switch_to_nxp_ll_sdio() {
+  echo ""
+  echo "Setting up for 2KL, 2LL (NXP - SDIO)"
+  restore_ko
+  fw_setenv fdt_file imx93-ea-ucom-kit.dtb 2>/dev/null
+  fw_setenv bt_hint nxp
+  fw_setenv cmd_custom "fdt mknod serial4 bluetooth; fdt set serial4/bluetooth compatible nxp,88w8987-bt"
+  prepare_for_nxp_ll_sdio
+  echo "Setup complete."
+  echo ""
+}
+
 
 function switch_to_nxp_xk_sdio() {
   echo ""
@@ -636,7 +698,7 @@ function switch_to_nxp_ym_sdio() {
   restore_ko
   fw_setenv fdt_file imx93-ea-ucom-kit.dtb 2>/dev/null
   fw_setenv bt_hint nxp_1ym_sdio
-  fw_setenv cmd_custom "fdt mknod serial4 bluetooth; fdt set serial4/bluetooth compatible nxp,88w8997-bt"
+  fw_setenv cmd_custom "fdt mknod serial4 bluetooth; fdt set serial4/bluetooth compatible nxp,88w8997-bt; fdt set /soc/bus@42800000/mmc@428b0000 max-frequency <134000000>"
   prepare_for_nxp_ym_sdio
   echo "Setup complete."
   echo ""
@@ -678,7 +740,7 @@ function usage() {
   echo ""
   echo "Where:"
   echo "  <module> is one of (case insensitive):"
-  echo "     CYW-SDIO, CYW-PCIe, 1CX, 1DX, 1LV, 1MW, 1YN, 2AE, 2AE-USB, 2BC, 2BC-USB, 1XA, 2BZ, 2EA-SDIO, 2EA-PCIe"
+  echo "     CYW-SDIO, CYW-PCIe, 1DX, 1LV, 1MW, 1YN, 2AE, 2AE-USB, 2BC, 2BC-USB, 1XA, 2BZ, 2GF, 2FY, 2EA-SDIO, 2EA-PCIe"
   echo "     1ZM, 1YM-SDIO, 1YM-PCIe, 1XK, 2XK, 1XL-SDIO, 1XL-PCIe, 2XS-SDIO, 2XS-PCIe, 2EL, 2DL, 2DS, CURRENT or OFF"
   echo ""
 }
@@ -692,10 +754,10 @@ fi
 cyw_module=${1^^}
 
 case ${1^^} in
-  CYW-PCIE|CX|1CX|XA|1XA|2EA-PCIE)
+  CYW-PCIE|XA|1XA|2EA-PCIE)
     switch_to_cypress_pcie
     ;;
-  CYW-SDIO|LV|1LV|DX|1DX|MW|1MW|YN|1YN|2AE|2BC|2EA-SDIO|BZ|2BZ)
+  CYW-SDIO|LV|1LV|DX|1DX|MW|1MW|YN|1YN|2AE|2BC|2EA-SDIO|BZ|2BZ|GF|2GF|FY|2FY)
     switch_to_cypress_sdio
     ;;
   AE-USB|2AE-USB)
