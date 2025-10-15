@@ -228,7 +228,7 @@ do_install () {
 	# Added Calibration configuration file for 1YM(NXP)
 #	install -m 444 ${WORKDIR}/10-network.rules                  ${D}${sysconfdir}/udev/rules.d/10-network.rules
 	install -m 444 ${WORKDIR}/hostapd-wifi6.conf                ${D}${sysconfdir}/hostapd-wifi6.conf
-	install -m 444 ${WORKDIR}/wpa_supplicant-wifi6.conf         ${D}${sysconfdir}/wpa_supplicant-wifi6.conf
+#	install -m 444 ${WORKDIR}/wpa_supplicant-wifi6.conf         ${D}${sysconfdir}/wpa_supplicant-wifi6.conf
 
 	install -d ${D}/${base_libdir}/firmware/nxp
     install -d ${D}/usr/share/nxp_wireless
